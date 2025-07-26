@@ -22,60 +22,40 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
 ]
 
-# scrape the CourseReport page
 def get_reviews_from_page(html):
     soup = BeautifulSoup(html, 'html.parser')
     reviews_data = []
 
-    # ✅ Match the full review container
-    review_containers = soup.select('div.flex.flex-col.gap-4')
+    # ✅ Match the container holding the review metadata
+    review_blocks = soup.select('div.flex.text-sm.leading-relaxed.justify-between.gap-2')
 
-    for review in review_containers:
-        # --- Metadata ---
-        name_tag = review.select_one('span.font-medium')
+    for block in review_blocks:
+        name_tag = block.select_one('span.font-medium')
         name = name_tag.text.strip() if name_tag else None
 
-        role_tag = review.select_one('div.flex.text-gray-medium span')
+        role_tag = block.select_one('div.flex.text-gray-medium span')
         role = role_tag.text.strip() if role_tag else None
 
-        verify_tag = review.select_one('div.text-green div')
+        verify_tag = block.select_one('div.text-green div')
         verification = verify_tag.text.strip() if verify_tag else None
 
-        date_tag = review.select_one('div.text-gray-medium.flex-shrink-0')
+        date_tag = block.select_one('div.text-gray-medium.flex-shrink-0')
         date = date_tag.text.strip() if date_tag else None
 
-        # --- Headline ---
-        headline_tag = review.select_one('h3.text-gray-darkest.font-medium')
-        headline = headline_tag.text.strip() if headline_tag else None
-
-        # --- Review Body ---
-        body_tag = review.select_one('div[data-controller="toggle"] > div')
-        review_body = body_tag.text.strip() if body_tag else None
-
-        # --- Ratings ---
-        ratings = {}
-        rating_sections = review.select('div.bg-gray-light div.grid.grid-cols-2')
-        for section in rating_sections:
-            try:
-                category = section.select_one('div:nth-child(1)').text.strip()
-                stars = len(section.select('svg.text-orange'))
-                ratings[category] = stars
-            except Exception:
-                continue
-
-        # --- Final Review Dictionary ---
         reviews_data.append({
             'name': name,
             'role': role,
             'verification': verification,
-            'date': date,
-            'headline': headline,
-            'review_body': review_body,
-            'ratings': ratings
+            'date': date
         })
+    
+    headline_block = soup.select('div.flex.flex-col.gap-4')
+
+    # --- Headline ---
+    headline_tag = review.select_one('h3.text-gray-darkest.font-medium')
+    headline = headline_tag.text.strip() if headline_tag else None
 
     return reviews_data
-
 
 # Main scraping loop
 all_reviews = []
@@ -90,10 +70,3 @@ for page in range(1, 15):  # Adjust page range if needed
 # Save as DataFrame
 df = pd.DataFrame(all_reviews)
 print(df.head())
-
-#df.to_json("reviews.json", indent=2)
-
-
-
-
-
