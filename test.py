@@ -26,34 +26,41 @@ def get_reviews_from_page(html):
     soup = BeautifulSoup(html, 'html.parser')
     reviews_data = []
 
-    # ✅ Match the container holding the review metadata
-    review_blocks = soup.select('div.flex.text-sm.leading-relaxed.justify-between.gap-2')
+    # Review info
+    review_blocks = soup.select('ul.divide-y.divide-gray.divide-solid > li')
 
     for block in review_blocks:
         name_tag = block.select_one('span.font-medium')
         name = name_tag.text.strip() if name_tag else None
-
+        
+        # Role
         role_tag = block.select_one('div.flex.text-gray-medium span')
         role = role_tag.text.strip() if role_tag else None
-
+        
+        # Verification info
         verify_tag = block.select_one('div.text-green div')
         verification = verify_tag.text.strip() if verify_tag else None
 
+        # Date
         date_tag = block.select_one('div.text-gray-medium.flex-shrink-0')
         date = date_tag.text.strip() if date_tag else None
+
+        # Headline
+        headline_tag = block.select_one('h3.text-gray-darkest.font-medium')
+        headline = headline_tag.text.strip() if headline_tag else None
+
+        # Body
+        body_tag = block.select_one('div[data-controller="toggle"] > div')
+        review_body = body_tag.text.strip() if body_tag else None
 
         reviews_data.append({
             'name': name,
             'role': role,
             'verification': verification,
-            'date': date
+            'date': date,
+            'headline': headline,
+            'review_body': review_body
         })
-    
-    headline_block = soup.select('div.flex.flex-col.gap-4')
-
-    # --- Headline ---
-    headline_tag = review.select_one('h3.text-gray-darkest.font-medium')
-    headline = headline_tag.text.strip() if headline_tag else None
 
     return reviews_data
 
@@ -69,4 +76,4 @@ for page in range(1, 15):  # Adjust page range if needed
 
 # Save as DataFrame
 df = pd.DataFrame(all_reviews)
-print(df.head())
+df.to_csv('course_report_reviews.csv', index=False)
