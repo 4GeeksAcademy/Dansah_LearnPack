@@ -22,52 +22,78 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
 ]
 
+def extract_rating(section, label):
+    try:
+        # Find the <p> tag with the correct label
+        label_tag = section.find('p', class_='rating-type', string=label)
+        if not label_tag:
+            return None
+
+        # Get the parent <div> of the label and locate the filled rating bar
+        rating_div = label_tag.find_parent('div', class_='review-scores')
+        filled = rating_div.select_one('.rating-icons__filled')
+
+        if filled and 'style' in filled.attrs:
+            width_str = filled['style'].split(':')[-1].strip().replace('%', '')
+            return round(float(width_str) / 20, 1)
+    except Exception:
+        return None
+
 def get_reviews_from_page(html):
     soup = BeautifulSoup(html, 'html.parser')
     reviews_data = []
 
     # Review info
-    review_blocks = soup.select('ul.divide-y.divide-gray.divide-solid > li')
+    review_blocks = soup.select('div.section--white.border-grey.mdc-layout-grid')
 
     for block in review_blocks:
-        name_tag = block.select_one('span.font-medium')
+        name_tag = block.select_one('h6.unset-margin__top.unset-margin__bottom')
         name = name_tag.text.strip() if name_tag else None
         
-        # Role
-        role_tag = block.select_one('div.flex.text-gray-medium span')
-        role = role_tag.text.strip() if role_tag else None
-        
-        # Verification info
-        verify_tag = block.select_one('div.text-green div')
-        verification = verify_tag.text.strip() if verify_tag else None
+        # Course
+        course_tag = block.select_one('p.unset-margin__bottom > span.text--semibold')
+        if course_tag and course_tag.text.strip() == 'Course':
+            course_info_tag = course_tag.find_next_sibling(text=True)
+            course = course_info_tag.strip() if course_info_tag else None
+        else:
+            course = None
 
         # Date
-        date_tag = block.select_one('div.text-gray-medium.flex-shrink-0')
+        date_tag = block.select_one('div.created-at p.subtitle')
         date = date_tag.text.strip() if date_tag else None
 
         # Headline
-        headline_tag = block.select_one('h3.text-gray-darkest.font-medium')
+        headline_tag = block.select_one('p.text--semibold.unset-margin__top span')
         headline = headline_tag.text.strip() if headline_tag else None
 
         # Body
-        body_tag = block.select_one('div[data-controller="toggle"] > div')
+        body_tag = block.select_one('div.review-description')
         review_body = body_tag.text.strip() if body_tag else None
+
+        # Ratings Section
+        rating_section = div.select_one('span.section-spacing')
+        overall = extract_rating(rating_section, 'Overall')
+        curriculum = extract_rating(rating_section, 'Curriculum')
+        job_support = extract_rating(rating_section, 'Job Support')
+
 
         reviews_data.append({
             'name': name,
-            'role': role,
-            'verification': verification,
+            'course': course,
             'date': date,
             'headline': headline,
-            'review_body': review_body
+            'review_body': review_body,
+            'overall_rating': overall,
+            'curriculum_rating': curriculum,
+            'job_support_rating': job_support
         })
 
     return reviews_data
 
 # Main scraping loop
 all_reviews = []
-for page in range(1, 15):  # Adjust page range if needed
-    url = f"https://www.coursereport.com/schools/4geeks-academy/reviews?reviews_page={page}"
+for page in range(1, 21):  # Adjust page range if needed
+    url = f"https://www.switchup.org/chimera/v2/school-review-list?path=%2Fbootcamps%2F4geeks-academy&schoolId=10492&perPage=10&simpleHtml=true&truncationLength=250&readMoreOmission=...&page={page}"
     headers = {'User-Agent': random.choice(USER_AGENTS)}
     response = requests.get(url, headers=headers)
     reviews_on_page = get_reviews_from_page(response.text)
@@ -76,4 +102,5 @@ for page in range(1, 15):  # Adjust page range if needed
 
 # Save as DataFrame
 df = pd.DataFrame(all_reviews)
-df.to_csv('course_report_reviews.csv', index=False)
+print(df.head())
+#df.to_csv('course_report_reviews.csv', index=False)
