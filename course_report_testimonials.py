@@ -30,6 +30,8 @@ def get_reviews_from_page():
 
     expected_categories = ['overall_experience', 'curriculum', 'job_assistance', 'instructors']
 
+    filled_star_path_d = "M12 .587l3.668 7.568L24 9.306l-6.064 5.828 1.48 8.279L12 19.446l-7.417 3.967 1.481-8.279L0 9.306l8.332-1.151z"
+
     for block in review_blocks:
         name = block.select_one('span.font-medium')
         role = block.select_one('div.flex.text-gray-medium span')
@@ -61,12 +63,16 @@ def get_reviews_from_page():
                     category = category_divs[0].text.strip().lower().replace(" ", "_")
                     star_container = category_divs[1]
 
-                    # Count filled stars by checking for "text-orange" class
-                    filled_stars = star_container.select('svg.text-orange')
-                    rating = len(filled_stars)
+                    # Count filled stars by checking path d attribute
+                    stars = star_container.select('svg')
+                    filled_stars_count = 0
+                    for star in stars:
+                        path = star.find('path')
+                        if path and path.get('d') == filled_star_path_d:
+                            filled_stars_count += 1
 
                     if category in expected_categories:
-                        review_data[category] = rating
+                        review_data[category] = filled_stars_count
 
         reviews.append(review_data)
 
