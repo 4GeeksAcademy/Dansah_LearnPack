@@ -42,17 +42,30 @@ def get_reviews_from_page():
     for block in review_blocks:
         try:
             name = block.find('h6').get_text(strip=True)
-            graduation_tag = block.find('span', class_='subtitle', string=lambda s: 'Graduated' in s)
+
+            graduation_tag = block.find('span', class_='subtitle', string=lambda s: s and 'Graduated' in s)
             graduation_date = graduation_tag.get_text(strip=True).replace("Graduated: ", "") if graduation_tag else None
 
-            review_date = block.find('div', class_='created-at').get_text(strip=True)
-            course = block.find('span').find_next('p').get_text(strip=True).replace('Course', '').strip()
+            # Extract review date correctly
+            review_date_tag = block.select_one('div.created-at p.subtitle')
+            review_date = review_date_tag.get_text(strip=True) if review_date_tag else None
 
+            # Extract course correctly
+            course = None
+            course_div = block.find('div', class_='section-spacing')
+            if course_div:
+                p_tag = course_div.find('p')
+                if p_tag:
+                    course_text = p_tag.get_text(separator=' ', strip=True)
+                    course = course_text.replace('Course', '').strip()
+
+            # Extract ratings
             overall = get_rating(block, 'Overall')
             curriculum = get_rating(block, 'Curriculum')
             job_support = get_rating(block, 'Job Support')
 
-            title_tag = block.find('p', class_='text--semibold')
+            # Extract title correctly
+            title_tag = block.select_one('div.section-spacing__top p.text--semibold.unset-margin__top')
             title = title_tag.get_text(strip=True).replace('"', '') if title_tag else None
 
             description_tag = block.find('div', class_='review-description')
@@ -125,7 +138,6 @@ while True:
             break
 
         next_page_num = int(next_btn.get_attribute('data-page'))
-        print(f"Next button points to page {next_page_num}")
 
         if next_page_num <= page:
             print("Next page number not greater than current page — stopping.")
