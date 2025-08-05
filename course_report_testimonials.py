@@ -79,42 +79,6 @@ def get_reviews_from_page():
     return reviews
 
 
-
-# def get_reviews_from_page():
-#     soup = BeautifulSoup(driver.page_source, 'html.parser')
-#     review_blocks = soup.select('ul.divide-y.divide-gray.divide-solid > li')
-#     reviews = []
-
-#     for block in review_blocks:
-#         name = block.select_one('span.font-medium')
-#         role = block.select_one('div.flex.text-gray-medium span')
-#         verification = block.select_one('div.text-green div')
-#         date = block.select_one('div.text-gray-medium.flex-shrink-0')
-#         headline = block.select_one('h3.text-gray-darkest.font-medium')
-#         body = block.select_one('div[data-controller="toggle"] > div')
-
-#         review_data = {
-#             'name': name.text.strip() if name else None,
-#             'role': role.text.strip() if role else None,
-#             'verification': verification.text.strip() if verification else None,
-#             'date': date.text.strip() if date else None,
-#             'headline': headline.text.strip() if headline else None,
-#             'review_body': body.text.strip() if body else None
-#         }
-
-#         # ✅ Extract star ratings
-#         rating_items = block.select('div.review-scores > div.review-score')
-#         for item in rating_items:
-#             category_el = item.select_one('p.rating-type')
-#             stars = item.select('rating-icons svg.text-yellow')
-#             if category_el:
-#                 category = category_el.text.strip().lower().replace(" ", "_")
-#                 review_data[category] = len(stars)
-
-#         reviews.append(review_data)
-
-#     return reviews
-
 # Start from page 1
 url = "https://www.coursereport.com/schools/4geeks-academy/reviews"
 driver.get(url)
