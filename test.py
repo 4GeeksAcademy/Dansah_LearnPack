@@ -1,106 +1,95 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
-import pandas as pd
 import time
-import random
+import re
 
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
-import time
-import random
-
-
-all_reviews = []
-
-# HTTP request headers to mimic a real user's web browser.
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 15_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-]
-
-def extract_rating(section, label):
-    try:
-        # Find the <p> tag with the correct label
-        label_tag = section.find('p', class_='rating-type', string=label)
-        if not label_tag:
-            return None
-
-        # Get the parent <div> of the label and locate the filled rating bar
-        rating_div = label_tag.find_parent('div', class_='review-scores')
-        filled = rating_div.select_one('.rating-icons__filled')
-
-        if filled and 'style' in filled.attrs:
-            width_str = filled['style'].split(':')[-1].strip().replace('%', '')
-            return round(float(width_str) / 20, 1)
-    except Exception:
+def extract_review_data(review_div):
+    # Reviewer info
+    reviewer = review_div.select_one('div.p7f0Nd a.yC3ZMb')
+    if not reviewer:
         return None
+    
+    name = reviewer.select_one('div.Vpc5Fe').text.strip() if reviewer.select_one('div.Vpc5Fe') else None
+    profile_url = reviewer.get('href', None)
+    num_reviews = reviewer.select_one('div.GSM50').text.strip() if reviewer.select_one('div.GSM50') else None
+    profile_img_style = reviewer.select_one('div.wSokxc')['style'] if reviewer.select_one('div.wSokxc') else ''
+    profile_img_url = re.search(r'url\("([^"]+)"\)', profile_img_style)
+    profile_img_url = profile_img_url.group(1) if profile_img_url else None
 
-def get_reviews_from_page(html):
+    # Rating and date
+    rating_div = review_div.select_one('div.k0Ysuc div.dHX2k')
+    stars = len(rating_div.find_all('svg')) if rating_div else None
+    date = review_div.select_one('div.k0Ysuc span.y3Ibjb').text.strip() if review_div.select_one('div.k0Ysuc span.y3Ibjb') else None
+
+    # Review text
+    review_text = review_div.select_one('div.OA1nbd').text.strip() if review_div.select_one('div.OA1nbd') else None
+
+    return {
+        'name': name,
+        'profile_url': profile_url,
+        'num_reviews': num_reviews,
+        'profile_img_url': profile_img_url,
+        'stars': stars,
+        'date': date,
+        'review_text': review_text
+    }
+
+def main():
+    url = "https://www.google.com/search?sca_esv=50347784169c3c85&hl=en&authuser=0&sxsrf=AE3TifPRPkMonRKhE9fIyyOQpKznneQJHA:1754530295486&si=AMgyJEtREmoPL4P1I5IDCfuA8gybfVI2d5Uj7QMwYCZHKDZ-E0avZvxuce6GVx3_9-D_fr6M0gI-0WeckzEERl50p8UilH8NbOSalriKY1qTKuRR08CaAFgOcQXRXe5aaHDgvPo2Wkm8OkHyoOi_m3Pw5NFmXzN-qA%3D%3D&q=4Geeks+Academy+Chile+Reviews&sa=X&ved=2ahUKEwjfkYrYxveOAxW8FDQIHe6gKYcQ0bkNegQIJBAE&biw=1366&bih=714&dpr=2"
+
+    driver = webdriver.Chrome()
+    driver.get(url)
+    wait = WebDriverWait(driver, 10)
+
+    # Click "More user reviews" repeatedly
+    while True:
+        try:
+            more_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'div.ZFiwCf span.LGwnxb.JGD2rd')))
+            more_button.click()
+            time.sleep(3)
+        except Exception:
+            print("No more 'More user reviews' button found or cannot click.")
+            break
+
+    # Parse loaded HTML with BeautifulSoup
+    html = driver.page_source
+    driver.quit()
+
     soup = BeautifulSoup(html, 'html.parser')
-    reviews_data = []
 
-    # Review info
-    review_blocks = soup.select('div.section--white.border-grey.mdc-layout-grid')
+    # Find all review containers (based on your example structure)
+    review_divs = soup.select('div.p7f0Nd')  # This selects the reviewer info div, need parent container
 
-    for block in review_blocks:
-        name_tag = block.select_one('h6.unset-margin__top.unset-margin__bottom')
-        name = name_tag.text.strip() if name_tag else None
-        
-        # Course
-        course_tag = block.select_one('p.unset-margin__bottom > span.text--semibold')
-        if course_tag and course_tag.text.strip() == 'Course':
-            course_info_tag = course_tag.find_next_sibling(text=True)
-            course = course_info_tag.strip() if course_info_tag else None
-        else:
-            course = None
+    # Because 'p7f0Nd' is nested inside the full review container, get the parent of each
+    # Let's get all parents with review blocks by going up two divs or so:
+    full_reviews = []
+    for div in review_divs:
+        parent = div.parent
+        # Try going up until we find the div containing the review text div 'OA1nbd'
+        while parent and not parent.select_one('div.OA1nbd'):
+            parent = parent.parent
+        if parent and parent not in full_reviews:
+            full_reviews.append(parent)
 
-        # Date
-        date_tag = block.select_one('div.created-at p.subtitle')
-        date = date_tag.text.strip() if date_tag else None
+    # Extract data for each review
+    for i, review_div in enumerate(full_reviews, 1):
+        data = extract_review_data(review_div)
+        if data:
+            print(f"Review #{i}:")
+            print(f"Name: {data['name']}")
+            print(f"Profile URL: {data['profile_url']}")
+            print(f"Number of reviews by reviewer: {data['num_reviews']}")
+            print(f"Profile Image URL: {data['profile_img_url']}")
+            print(f"Stars: {data['stars']}")
+            print(f"Date: {data['date']}")
+            print(f"Review Text: {data['review_text']}")
+            print("-" * 80)
 
-        # Headline
-        headline_tag = block.select_one('p.text--semibold.unset-margin__top span')
-        headline = headline_tag.text.strip() if headline_tag else None
-
-        # Body
-        body_tag = block.select_one('div.review-description')
-        review_body = body_tag.text.strip() if body_tag else None
-
-        # Ratings Section
-        rating_section = div.select_one('span.section-spacing')
-        overall = extract_rating(rating_section, 'Overall')
-        curriculum = extract_rating(rating_section, 'Curriculum')
-        job_support = extract_rating(rating_section, 'Job Support')
+if __name__ == "__main__":
+    main()
 
 
-        reviews_data.append({
-            'name': name,
-            'course': course,
-            'date': date,
-            'headline': headline,
-            'review_body': review_body,
-            'overall_rating': overall,
-            'curriculum_rating': curriculum,
-            'job_support_rating': job_support
-        })
 
-    return reviews_data
-
-# Main scraping loop
-all_reviews = []
-for page in range(1, 21):  # Adjust page range if needed
-    url = f"https://www.switchup.org/chimera/v2/school-review-list?path=%2Fbootcamps%2F4geeks-academy&schoolId=10492&perPage=10&simpleHtml=true&truncationLength=250&readMoreOmission=...&page={page}"
-    headers = {'User-Agent': random.choice(USER_AGENTS)}
-    response = requests.get(url, headers=headers)
-    reviews_on_page = get_reviews_from_page(response.text)
-    all_reviews.extend(reviews_on_page)
-    time.sleep(random.uniform(1, 3))  
-
-# Save as DataFrame
-df = pd.DataFrame(all_reviews)
-print(df.head())
-#df.to_csv('course_report_reviews.csv', index=False)
