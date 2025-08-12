@@ -23,7 +23,26 @@ def wait_for_reviews():
         EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'ul.divide-y.divide-gray.divide-solid > li'))
     )
 
+def expand_all_read_more_buttons():
+    try:
+        buttons = driver.find_elements(By.CSS_SELECTOR, "button[data-action='click->toggle#toggle']")
+        print(f"Found {len(buttons)} Read More buttons on this page.")
+
+        for i, btn in enumerate(buttons, 1):
+            if btn.is_displayed():
+                try:
+                    driver.execute_script("arguments[0].click();", btn)
+                    time.sleep(0.5)  # Increase delay for animation
+                except Exception as e:
+                    print(f"⚠️ Could not click Read More button #{i}: {e}")
+            else:
+                print(f"Read More button #{i} not visible, skipping.")
+    except Exception as e:
+        print(f"⚠️ Error finding Read More buttons: {e}")
+
+
 def get_reviews_from_page():
+    expand_all_read_more_buttons() 
     soup = BeautifulSoup(driver.page_source, 'html.parser')
     review_blocks = soup.select('ul.divide-y.divide-gray.divide-solid > li')
     reviews = []
@@ -38,7 +57,16 @@ def get_reviews_from_page():
         verification = block.select_one('div.text-green div')
         date = block.select_one('div.text-gray-medium.flex-shrink-0')
         headline = block.select_one('h3.text-gray-darkest.font-medium')
-        body = block.select_one('div[data-controller="toggle"] > div')
+        # body_container = block.select_one('div[data-controller="toggle"]')
+        # review_text = body_container.get_text(separator=' ', strip=True) if body_container else None
+        body_container = block.select_one('div[data-controller="toggle"]')
+        if body_container:
+            # Find all divs that have data-toggle-target="content"
+            content_divs = body_container.select('div[data-toggle-target="content"]')
+            # Join the text from all those divs (usually 2 divs: truncated and full)
+            review_text = ' '.join(div.get_text(separator=' ', strip=True) for div in content_divs)
+        else:
+            review_text = None
 
         review_data = {
             'name': name.text.strip() if name else None,
@@ -46,7 +74,7 @@ def get_reviews_from_page():
             'verification': verification.text.strip() if verification else None,
             'date': date.text.strip() if date else None,
             'headline': headline.text.strip() if headline else None,
-            'review_body': body.text.strip() if body else None
+            'review_body': review_text
         }
 
         # Initialize all expected rating fields with None
@@ -78,7 +106,6 @@ def get_reviews_from_page():
 
     return reviews
 
-
 # Start from page 1
 url = "https://www.coursereport.com/schools/4geeks-academy/reviews"
 driver.get(url)
@@ -87,14 +114,25 @@ wait_for_reviews()
 all_reviews = []
 page = 1
 
+seen_first_review = None
+
 while True:
     print(f"Scraping page {page}...")
     wait_for_reviews()
     reviews = get_reviews_from_page()
-    all_reviews.extend(reviews)
+
+    if reviews:
+        first_anchor = (reviews[0]['name'], reviews[0]['date'])
+        if first_anchor == seen_first_review:
+            print("Duplicate page detected. Stopping.")
+            break
+        seen_first_review = first_anchor
+        all_reviews.extend(reviews)
+    else:
+        print("No reviews found. Stopping.")
+        break
 
     try:
-        # Find and click the next button if it exists and is enabled
         next_btn = WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'a[rel="next"]:not(.disabled)'))
         )

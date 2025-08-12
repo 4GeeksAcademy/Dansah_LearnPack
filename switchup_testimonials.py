@@ -46,11 +46,9 @@ def get_reviews_from_page():
             graduation_tag = block.find('span', class_='subtitle', string=lambda s: s and 'Graduated' in s)
             graduation_date = graduation_tag.get_text(strip=True).replace("Graduated: ", "") if graduation_tag else None
 
-            # Extract review date correctly
             review_date_tag = block.select_one('div.created-at p.subtitle')
             review_date = review_date_tag.get_text(strip=True) if review_date_tag else None
 
-            # Extract course correctly
             course = None
             course_div = block.find('div', class_='section-spacing')
             if course_div:
@@ -59,17 +57,24 @@ def get_reviews_from_page():
                     course_text = p_tag.get_text(separator=' ', strip=True)
                     course = course_text.replace('Course', '').strip()
 
-            # Extract ratings
             overall = get_rating(block, 'Overall')
             curriculum = get_rating(block, 'Curriculum')
             job_support = get_rating(block, 'Job Support')
 
-            # Extract title correctly
             title_tag = block.select_one('div.section-spacing__top p.text--semibold.unset-margin__top')
             title = title_tag.get_text(strip=True).replace('"', '') if title_tag else None
 
+            # Extract clean review description
             description_tag = block.find('div', class_='review-description')
-            description = description_tag.get_text(strip=True) if description_tag else None
+            description = None
+            if description_tag:
+                # Remove any Read More/Read Less elements
+                for rm in description_tag.find_all(text=lambda t: t.strip().lower() in [
+                    "read more", "read less", "leer más", "leer menos"
+                ]):
+                    rm.extract()
+                # Get the remaining text cleanly
+                description = description_tag.get_text(" ", strip=True)
 
             reviews.append({
                 'name': name,
