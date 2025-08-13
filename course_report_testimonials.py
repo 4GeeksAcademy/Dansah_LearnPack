@@ -7,6 +7,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
+from functions import categorize_review
 
 # Setup headless browser
 options = webdriver.ChromeOptions()
@@ -145,7 +146,16 @@ while True:
 
 driver.quit()
 
-# Save to CSV
+# create a dataframe
 df = pd.DataFrame(all_reviews)
+
+# Apply categorization
+df["matched_categories"] = df.apply(lambda row: categorize_review(row["headline"], row["review_body"]), axis=1)
+
+# Show results
+print(df[["headline", "review_body", "matched_categories"]].head())
+
+#save the data
 df.to_csv("course_report_reviews.csv", index=False)
+
 print(f"✅ Scraping complete: {len(df)} reviews saved to 'course_report_reviews.csv'")

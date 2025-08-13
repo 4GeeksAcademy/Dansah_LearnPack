@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+from functions import categorize_review
 
 url = 'https://bootcamprankings.com/listings/4geeks-academy/'
 
@@ -74,8 +75,16 @@ for comment in comments:
     }
     reviews_data.append(review_record)
 
-# Save to CSV using pandas
+# create a dataframe
 df = pd.DataFrame(reviews_data)
+
+# Apply categorization
+df["matched_categories"] = df.apply(lambda row: categorize_review(body=row["Review"]), axis=1)
+
+# Show results
+print(df[["Review", "matched_categories"]].head())
+
+# Save to CSV using pandas
 df.to_csv('bootcamprankings_reviews.csv', index=False, encoding='utf-8-sig')
 
 print(f"Saved {len(reviews_data)} reviews to 'bootcamprankings_reviews.csv'")
