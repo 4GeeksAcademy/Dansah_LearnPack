@@ -178,12 +178,14 @@ driver.quit()
 # create a dataframe
 df = pd.DataFrame(all_reviews)
 
+# Apply categorization and expand dictionary into separate columns
+category_df = df.apply(
+    lambda row: pd.Series(categorize_review(row.get("title"), row.get("description"))),
+    axis=1
+)
 
-# Apply categorization
-df["matched_categories"] = df.apply(lambda row: categorize_review(row["title"], row["description"]), axis=1)
-
-# Show results
-print(df[["title", "description", "matched_categories"]].head())
+# Concatenate category columns with original DataFrame
+df = pd.concat([df, category_df], axis=1)
 
 #save the data
 df.to_csv("switchup_reviews.csv", index=False)

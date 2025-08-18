@@ -149,11 +149,14 @@ driver.quit()
 # create a dataframe
 df = pd.DataFrame(all_reviews)
 
-# Apply categorization
-df["matched_categories"] = df.apply(lambda row: categorize_review(row["headline"], row["review_body"]), axis=1)
+# Apply categorization and expand dictionary into separate columns
+category_df = df.apply(
+    lambda row: pd.Series(categorize_review(row.get("headline"), row.get("review_body"))),
+    axis=1
+)
 
-# Show results
-print(df[["headline", "review_body", "matched_categories"]].head())
+# Concatenate category columns with original DataFrame
+df = pd.concat([df, category_df], axis=1)
 
 #save the data
 df.to_csv("course_report_reviews.csv", index=False)
