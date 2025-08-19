@@ -1,12 +1,13 @@
+from functions import categorize_review
 import pandas as pd
-
+pd.set_option('display.max_columns', None)
 
 # create a dataframe
-df = pd.readcsv("/workspaces/Dansah_LearnPack/nps_reviews.csv")
+df = pd.read_csv("/workspaces/Dansah_LearnPack/nps_reviews.csv")
 
 # Apply categorization and expand dictionary into separate columns
 category_df = df.apply(
-    lambda row: pd.Series(categorize_review(row.get("title"), row.get("description"))),
+    lambda row: pd.Series(categorize_review(body=row["comment"])),
     axis=1
 )
 
