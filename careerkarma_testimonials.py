@@ -8,6 +8,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
+from selenium.webdriver.common.action_chains import ActionChains
+from dotenv import load_dotenv
+load_dotenv()
+
+# BEFORE RUNNING THIS FILE RUN THE FOLLOWING COMMANDS IN THE TERMINAL:
+# export CK_EMAIL="your@email.com"
+# export CK_PASSWORD="yourpassword"
 
 # -------------------------
 # Configuration
@@ -40,7 +47,6 @@ wait.until(EC.presence_of_element_located((By.NAME, "email"))).send_keys(EMAIL)
 driver.find_element(By.NAME, "password").send_keys(PASSWORD)
 driver.find_element(By.CSS_SELECTOR, "button[data-qa='sign-in-form_sign-in-btn']").click()
 
-# Wait for login to complete
 wait.until(EC.url_contains("careerkarma.com"))
 print("✅ Logged in successfully")
 
@@ -79,7 +85,7 @@ while True:
         driver.execute_script("arguments[0].scrollIntoView(true);", load_more_btn)
         driver.execute_script("arguments[0].click();", load_more_btn)
         print("➡️ Clicked 'Load More'")
-        time.sleep(2)  # wait for new reviews to render
+        time.sleep(2)
         
         reviews = driver.find_elements(By.CSS_SELECTOR, "div[data-qa='schools-page_reviews-section_school-review']")
         if len(reviews) == prev_count:
@@ -106,49 +112,77 @@ for see_more in driver.find_elements(By.CSS_SELECTOR, "label.sc-86822f03-0"):
 print("✅ All review texts expanded")
 
 # -------------------------
-# 5️⃣ Parse reviews
+# 5️⃣ Parse reviews and save to CSV
 # -------------------------
-soup = BeautifulSoup(driver.page_source, "html.parser")
-review_cards = soup.select("div[data-qa='schools-page_reviews-section_school-review']")
-print(f"Parsing {len(review_cards)} reviews...")
+review_elements = driver.find_elements(By.CSS_SELECTOR, "div[data-qa='schools-page_reviews-section_school-review']")
+print(f"Writing {len(review_elements)} reviews to CSV...")
 
-# -------------------------
-# 6️⃣ Save to CSV
-# -------------------------
 with open("careerkarma_reviews.csv", "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
     writer.writerow([
         "Name", "Role", "Date", "Title", "Review",
         "Overall", "Instructors", "Curriculum", "Job Assistance"
     ])
+    
+    actions = ActionChains(driver)
 
-    for card in review_cards:
-        name_tag = card.select_one("span.sc-aefd771a-3")
+    for idx, review_el in enumerate(review_elements, start=1):
+        soup_card = BeautifulSoup(review_el.get_attribute("outerHTML"), "html.parser")
+
+        # --- Static fields ---
+        name_tag = soup_card.select_one("span.sc-aefd771a-3")
         name = name_tag.get_text(strip=True) if name_tag else "N/A"
 
-        role_tag = card.select_one("span.sc-aefd771a-3 span")
+        role_tag = soup_card.select_one("span.sc-aefd771a-3 span")
         role = role_tag.get_text(strip=True) if role_tag else "N/A"
 
-        date_tag = card.select_one("div.sc-18449bc4-1")
+        date_tag = soup_card.select_one("div.sc-18449bc4-1")
         date = date_tag.get_text(strip=True) if date_tag else "N/A"
 
-        review_text_tag = card.select_one("div.sc-18449bc4-21")
+        title_tag = soup_card.select_one("p.sc-18449bc4-4")
+        title = title_tag.get_text(strip=True) if title_tag else "N/A"
+
+        review_text_tag = soup_card.select_one("div.sc-18449bc4-21")
         review_text = review_text_tag.get_text(strip=True) if review_text_tag else "N/A"
 
-        # Ratings
-        def get_rating(label):
-            tag = card.select_one(f"span[data-qa='review-card_rating-{label}']")
-            return tag.get_text(strip=True) if tag else "N/A"
+        # --- Dynamic ratings ---
+        overall = instructors = curriculum = job_assistance = "N/A"
 
-        overall = get_rating("overall")
-        instructors = get_rating("instructors")
-        curriculum = get_rating("curriculum")
-        job_assistance = get_rating("job_assistance")
+        try:
+            overall_star_imgs = review_el.find_elements(By.CSS_SELECTOR, "img[alt='star'][type='review']")
+            overall = sum(1 for img in overall_star_imgs if "star-checked" in img.get_attribute("src"))
 
-        writer.writerow([name, role, date, "", review_text,
+            try:
+                more_arrow = WebDriverWait(review_el, 3).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt='more']"))
+                )
+                actions.move_to_element(more_arrow).perform()
+                time.sleep(0.5)
+
+                dropdowns = review_el.find_elements(By.CSS_SELECTOR, "div[type='starsDropdown']")
+                for dd in dropdowns:
+                    try:
+                        label = dd.find_element(By.XPATH, "./preceding-sibling::span").text.strip().lower()
+                    except:
+                        label = ""
+                    stars = dd.find_elements(By.CSS_SELECTOR, "img[src*='bootcamps-star-checked.png']")
+                    filled = len(stars)
+                    if "instructors" in label:
+                        instructors = filled
+                    elif "curriculum" in label:
+                        curriculum = filled
+                    elif "job assistance" in label:
+                        job_assistance = filled
+
+            except:
+                pass
+
+        except Exception as e:
+            print(f"⚠️ Ratings error on review #{idx}: {e}")
+
+        # --- Write row ---
+        writer.writerow([name, role, date, title, review_text,
                          overall, instructors, curriculum, job_assistance])
 
 print("✅ Reviews saved to careerkarma_reviews.csv")
-
 driver.quit()
-
